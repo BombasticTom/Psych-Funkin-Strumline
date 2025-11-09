@@ -1,0 +1,8 @@
+Value 1 - The animation name
+Basic animations are: "left", "center" and "right"
+
+Value 2 - The animation state
+"prepare" - Puts strumlines into their position BEFORE
+the starting animation
+"start" - Plays the starting (entering) animation
+"end" - Plays the ending (leaving) animation

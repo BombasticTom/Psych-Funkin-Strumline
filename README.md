@@ -1,2 +1,2 @@
 # Psych-Funkin-Strumline
-Hi. Thsi page is unfinished. Please check development branches. Thank you :)
+Hi. Welcome to the develop branch. Things you see here are currently incomplete and will be a subject to a lot of change, as I'm trying to figure out how to push Psych Engine to it's limits

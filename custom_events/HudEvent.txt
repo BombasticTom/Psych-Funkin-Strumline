@@ -1,0 +1,2 @@
+true - tweens the hud alpha and makes the player cpu controlled
+false - everything's normal again

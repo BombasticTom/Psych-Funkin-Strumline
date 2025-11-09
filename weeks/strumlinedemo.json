@@ -1,0 +1,32 @@
+{
+	"songs": [
+		[
+			"Hammerhead",
+			"mario",
+			[
+				153,
+				15,
+				2
+			]
+		]
+	],
+	"hiddenUntilUnlocked": false,
+	"hideFreeplay": false,
+	"weekBackground": "stage",
+	"difficulties": "Normal",
+	"weekCharacters": [
+		"",
+		"bf",
+		"gf"
+	],
+	"storyName": "hammerhead!!!",
+	"weekName": "strumlinedemo",
+	"freeplayColor": [
+		146,
+		113,
+		253
+	],
+	"hideStoryMode": false,
+	"weekBefore": "tutorial",
+	"startUnlocked": true
+}
