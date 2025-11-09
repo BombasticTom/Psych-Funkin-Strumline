@@ -1,2 +1,2 @@
 # Psych-Funkin-Strumline
-wip
+Hi. Thsi page is unfinished. Please check development branches. Thank you :)
