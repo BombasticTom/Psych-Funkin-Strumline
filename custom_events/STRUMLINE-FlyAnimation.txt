@@ -1,0 +1,6 @@
+Animates a strumline into view by moving it from a vertical position.
+Value 1: Name of the strumline.
+Value 2: Animation settings, separated by semicolons (e.g. "ID; Time; Tween").
+> ID – Lane number where the strumline appears (default: center lane)
+> Time – Duration measured in seconds (default: 2)
+> Tween – Easing type (e.g. bouncein, sineinout) (default: linear)

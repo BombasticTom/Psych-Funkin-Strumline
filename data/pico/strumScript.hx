@@ -7,7 +7,7 @@ var curSpawnNote:Note;
 // Variables for Girlfriend's notes
 var gfNotes:Array<Note> = [];
 var gfStrums:Array<StrumNote> = [];
-var ghostNotes:FlxTypedGroup<Note> = new FlxTypedGroup<Note>();
+var ghostNotes:FlxTypedGroup<Note> = new FlxTypedGroup();
 
 // Recreation of invalidateNote
 function invalidateNote(note:Note)
@@ -42,29 +42,22 @@ function onInit()
 	gfStrums = createStrumline("GF Notes");
 
 	// Adds it to the game! Behind Boyfriend!
-	addStrumBehind("bf", "GF Notes");
-
-	// Basic position for your strumline
-	var strumY:Float;
-
-	if (ClientPrefs.data.downScroll)
-		strumY = FlxG.height - 150;
-	else
-		strumY = 50;
+	addStrumlineBehind("bf", "GF Notes");
 
 	// Code to position the strumline (and then make it hidden)
-	positionStrumline("GF Notes", getStrumlineMidpoint("bf"), strumY);
-	setVisible("GF Notes", false);
+	positionStrumline("GF Notes", getStrumlineMidpoint("bf"), DEFAULT_STRUM_Y);
+	setStrumlineVisible("GF Notes", false);
 
 	// Code to filter out Girlfriend's notes from the rest of notes
 	gfNotes = game.unspawnNotes.filter(
 		(note:Note) -> {
 			if (note.noteType == "GF Notes")
 			{
+				note.texture = "mechanics/GF_Transparent_Notes";
+				note.rgbShader.enabled = false;
 				note.mustPress = false;
-				note.rgbShader.r = FlxColor.WHITE;
 				note.copyAlpha = false;
-				note.alpha = 0.3;
+				// note.alpha = 0.3;
 				return true;
 			}
 			return false;
@@ -80,8 +73,13 @@ function onInit()
 	game.noteGroup.insert(0, ghostNotes);
 }
 
+var stunned:Bool = false;
+
 function onUpdate(elapsed:Float)
 {
+	if (stunned)
+		return;
+
 	if (curSpawnNote != null)
 	{
 		var time:Float = game.spawnTime * playbackRate;
@@ -90,7 +88,7 @@ function onUpdate(elapsed:Float)
 			time /= game.songSpeed;
 
 		if(curSpawnNote.multSpeed < 1)
-			time /= note.multSpeed;
+			time /= curSpawnNote.multSpeed;
 
 		if (curSpawnNote.strumTime - Conductor.songPosition < time)
 		{
@@ -105,7 +103,7 @@ function onUpdate(elapsed:Float)
 		if (ghostNotes.length < 1)
 		{
 			remove(ghostNotes);
-			this.active = false;
+			stunned = true;
 			return;
 		}
 	}

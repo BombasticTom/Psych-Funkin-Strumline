@@ -21,18 +21,18 @@ function onInit()
 	// You can also use assignCharacter("Third Player Note", game.gf) to do the same thing!
 	createStrumline("Third Player Note", luigi);
 
-	addStrumline("Third Player Note"); // Adds it to the game!
+	// addStrumline("Third Player Note"); // Adds it to the game!
 
 	// createStrumline("Fourth Player Note"); // NOWAY....
 	// addStrumline("Fourth Player Note"); // 😱
 
-	scaleNotes(0.625); // Scales all the notes down (so they can all be visible and not go off-screen)
+	scaleNotes(0.9); // Scales all the notes down (so they can all be visible and not go off-screen)
 
 	// Basic position for your strumline
 
-	positionStrumline("Third Player Note", FlxG.width * .125);
-	positionStrumline("dad", FlxG.width*0.5);
-	positionStrumline("bf", FlxG.width*0.875);
+	// positionStrumline("Third Player Note", FlxG.width * .125);
+	// positionStrumline("dad", FlxG.width*0.5);
+	// positionStrumline("bf", FlxG.width*0.875);
 
 	// Puts all of the strumlines to their position before the staring animation begins
 
@@ -59,7 +59,7 @@ function onSongStart()
 {
 	// setStrumLineOrder(["dad", "bf"]);
 	// flyStrumlineUp("Third Player Note", 3, 5, FlxEase.sineInOut);
-	removeStrumline("Third Player Note");
+	// removeStrumline("Third Player Note");
 }
 
 // More character code
@@ -83,7 +83,7 @@ function flyStrumlineUp(name:String, id:Int, ?time:Float, ?tween:FlxEase)
 
 	tween = tween ?? FlxEase.linear;
 
-	var strumlineOrder = getStrumLineOrder();
+	var strumlineOrder = getStrumlineOrder();
 	id = Math.max(Math.min(id, strumlineOrder.length + 1), 1) - 1;
 
 	strumlineOrder.insert(id, name);
@@ -107,7 +107,7 @@ function flyStrumlineUp(name:String, id:Int, ?time:Float, ?tween:FlxEase)
 
 function oldFormula()
 {
-	setStrumLineOrder(["dad", "bf", "Third Player Note"]);
+	setStrumlineOrder(["dad", "bf", "Third Player Note"]);
 
 	var i:Int = 0;
 	var len:Int = strumAPI.get("strumlineOrder").length;
@@ -121,7 +121,7 @@ function oldFormula()
 
 function oldFormula2()
 {
-	setStrumLineOrder(["dad", "bf"]);
+	setStrumlineOrder(["dad", "bf"]);
 	var whatIwanttoappear:String = "Third Player Note";
 
 	strumAPI.get("strumlineOrder").insert(1, whatIwanttoappear);

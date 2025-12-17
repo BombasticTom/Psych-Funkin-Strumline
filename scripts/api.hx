@@ -13,6 +13,9 @@ typedef StrumData = {
 	@:optional var char:Character;
 }
 
+final defaultScale:Float = 0.7;
+var curScale:Float =  defaultScale;
+
 var swagWidth:Float = 160;
 
 var scripts:Array<HScript> = [];
@@ -69,6 +72,9 @@ function moveStrumline(strumLine:String, ?X:Float, ?Y:Float, ?time:Float, ?ease:
 
 function onStrumAdded(strum:StrumNote)
 {
+	strum.scale.set(curScale, curScale);
+	strum.updateHitbox();
+
 	var returnValue = callEvent("onStrumAdded", [strum]);
 
 	if (returnValue != Function_Stop && !PlayState.isStoryMode && !game.skipArrowStartTween)
@@ -84,11 +90,53 @@ function onStrumRemoved(strum:StrumNote)
 	callEvent("onStrumRemoved", [strum]);
 }
 
+function addStrumline(name:String, ?isPlayer:Bool):Void {
+	if (strumlineOrder.contains(name))
+		return;
+
+	for (strum in getStrumline(name))
+	{
+		game.strumLineNotes.add(strum);
+		onStrumAdded(strum);
+	}
+
+	strumlineOrder.push(name);
+};
+
+function insertStrumline(idx:Int, name:String, ?isPlayer:Bool):Void {
+	if (strumlineOrder.contains(name))
+		return;
+
+	var strumIDX:Int = game.strumLineNotes.length;
+
+	if (idx < strumlineOrder.length)
+		strumIDX = game.strumLineNotes.members.indexOf(getStrumline(strumlineOrder[idx])[0]);
+
+	for (strum in getStrumline(name))
+	{
+		game.strumLineNotes.insert(strumIDX, strum);
+		onStrumAdded(strum);
+	}
+
+	strumlineOrder.insert(idx, name);
+};
+
+function addStrumlineBehind(strumline:String, name:String, ?isPlayer:Bool):Void {
+	insertStrumline(strumlineOrder.indexOf(strumline), name, isPlayer);
+};
+
 // EVENT HANDLING --------------------------------------------------------------------------
 
 // Way to identify animation events
 var eventPrefix:String = "STRUMLINE-";
 var animationMap:StringMap<HScript> = new StringMap();
+
+function validateAnimScript(script:HScript):Bool {
+	if (script.exists("onAnim_Start"))
+		return true;
+
+	return false;
+}
 
 function onEventPushed(n:String) {
 	if (StringTools.startsWith(n, eventPrefix))
@@ -98,14 +146,27 @@ function onEventPushed(n:String) {
 		var animation:String = StringTools.trim(n.substr(eventPrefix.length));
 		var scriptPath:String = Paths.mods(Mods.currentModDirectory + "/scripts/animation/" + animation + ".hx");
 
-		if (FileSystem.exists(scriptPath) && !animationMap.exists(animation))
-			animationMap.set(animation, initAnimScript(new HScript(null, scriptPath)));
+		if (FileSystem.exists(scriptPath) && !animationMap.exists(n))
+		{
+			var daScript = new HScript(null, scriptPath);
+
+			if (validateAnimScript(daScript))
+				animationMap.set(n, initAnimScript(daScript));
+			else
+				daScript.destroy();
+		}
 	}
 }
 
 function onEvent(n:String, v1:String, v2:String) {
-	if (StringTools.startsWith(n, eventPrefix)) {
-		var animation:String = StringTools.trim(n.substr(eventPrefix.length));
+	if (animationMap.exists(n)) {
+		var script = animationMap.get(n);
+
+		var properties = v2.split(";");
+		for (i in 0...properties.length)
+			properties[i] = StringTools.trim(properties[i]);
+
+		script.call("onAnim_Start", [v1].concat(properties));
 	}
 }
 
@@ -117,16 +178,13 @@ function applyDefaultScript(script:HScript):HScript
 	
 	script.set("getCharacter", getCharacter);
 
-	script.set("positionStrumline", positionStrumline);
-	script.set("moveStrumline", moveStrumline);
-
-	script.set("setVisible", (name:String, value:Bool) -> {
+	script.set("setStrumlineVisible", (name:String, value:Bool) -> {
 		for (strum in getStrumline(name))
 			strum.visible = value;
 	});
 
-	script.set("getStrumLineOrder", () -> return strumlineOrder);
-	script.set("setStrumLineOrder", (order:Array<String>) -> strumlineOrder = order);
+	script.set("getStrumlineOrder", () -> return strumlineOrder);
+	script.set("setStrumlineOrder", (order:Array<String>) -> strumlineOrder = order);
 
 	script.set("getStrumlineMidpoint", function (name:String):Float {
 		var strumline:Array<StrumNote> = getStrumline(name);
@@ -138,23 +196,63 @@ function applyDefaultScript(script:HScript):HScript
 	});
 
 	script.set("scaleNotes", function(size:Float):Void {
+		var convScale = defaultScale * size;
+		curScale = convScale;
+
 		for (strum in game.strumLineNotes)
 		{
-			strum.scale.set(size, size);
+			strum.scale.set(convScale, convScale);
 			strum.updateHitbox();
 		}
 
 		for (note in game.unspawnNotes)
 		{
 			if (note.isSustainNote)
-				note.offsetX *= (size / note.scale.x);
+				note.offsetX *= (convScale / note.scale.x);
 			else
-				note.scale.y = size;
+				note.scale.y = convScale;
 
-			note.scale.x = size;
+			note.scale.x = convScale;
 			note.updateHitbox();
 		}
 	});
+
+	script.set("isStrumlineAlive", function(name:String):Void {
+		return strumlineOrder.contains(name);
+	});
+
+	script.set("addStrumline", addStrumline);
+	script.set("insertStrumline", insertStrumline);
+	script.set("addStrumlineBehind", addStrumlineBehind);
+
+	script.set("removeStrumline", function(name:String):Void {
+		for (strum in getStrumline(name))
+		{
+			var tweenData = script.call("tween_getRemoveData", [strum]).returnValue;
+			
+			if (tweenData != null)
+			{
+				var properties = tweenData.properties ?? {};
+				var time = tweenData.time ?? 0;
+				var settings = tweenData.settings ?? {};
+
+				var userOnComplete = settings.onComplete;
+				settings.onComplete = (_) -> {
+					if (userOnComplete != null) userOnComplete(_);
+					onStrumRemoved(strum);
+				}
+
+				FlxTween.tween(strum, properties, time, settings);
+			}
+			else
+				onStrumRemoved(strum);
+		}
+
+		strumlineOrder.remove(name);
+	});
+
+	script.set("positionStrumline", positionStrumline);
+	script.set("moveStrumline", moveStrumline);
 
 	return script;
 }
@@ -202,54 +300,6 @@ function initGameScript(script:HScript):HScript
 		NoteTypesConfig.loadNoteTypeData(name); // ChartingState.noteTypeList.push(name);
 
 		return strumNotes;
-	});
-
-	script.set("addStrumline", function(name:String, ?isPlayer:Bool):Void {
-		for (strum in getStrumline(name))
-		{
-			game.strumLineNotes.add(strum);
-			onStrumAdded(strum);
-		}
-
-		strumlineOrder.push(name);
-	});
-
-	script.set("addStrumlineBehind", function(strum:String, name:String, ?isPlayer:Bool):Void {
-		var strumIDX:Int = game.strumLineNotes.members.indexOf(getStrumline(strum)[0]);
-
-		for (strum in getStrumline(name))
-		{
-			game.strumLineNotes.insert(strumIDX, strum);
-			onStrumAdded(strum);
-		}
-
-		strumlineOrder.insert(strumlineOrder.indexOf(strum), name);
-	});
-
-	script.set("removeStrumline", function(name:String):Void {
-		for (strum in getStrumline(name))
-		{
-			var tweenData = script.call("tween_getRemoveData", [strum]).returnValue;
-			
-			if (tweenData != null)
-			{
-				var properties = tweenData.properties ?? {};
-				var time = tweenData.time ?? 0;
-				var settings = tweenData.settings ?? {};
-
-				var userOnComplete = settings.onComplete;
-				settings.onComplete = (_) -> {
-					if (userOnComplete != null) userOnComplete(_);
-					onStrumRemoved(strum);
-				}
-
-				FlxTween.tween(strum, properties, time, settings);
-			}
-			else
-				onStrumRemoved(strum);
-		}
-
-		strumlineOrder.remove(name);
 	});
 
 	scripts.push(script);
