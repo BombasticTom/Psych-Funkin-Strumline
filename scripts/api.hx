@@ -7,6 +7,7 @@ import psychlua.HScript;
 import states.editors.ChartingState;
 import backend.NoteTypesConfig;
 import backend.Mods;
+import psychlua.LuaUtils;
 
 typedef StrumData = {
 	var strumline:Array<StrumNote>;
@@ -53,9 +54,10 @@ function positionStrumline(name:String, ?X:Float, ?Y:Float):Void {
 	}
 }
 
-function moveStrumline(strumLine:String, ?X:Float, ?Y:Float, ?time:Float, ?ease:FlxEase):Void {
+function moveStrumline(strumLine:String, ?X:Float, ?Y:Float, ?time:Float, ?ease:FlxEase, ?onComplete:Void->Void):Void {
 	time = time ?? 0;
 	ease = ease ?? FlxEase.linear;
+	var cum:Bool = false;
 	
 	if (Math.max(0, time) == 0) {
 		positionStrumline(strumLine, X, Y);
@@ -63,10 +65,19 @@ function moveStrumline(strumLine:String, ?X:Float, ?Y:Float, ?time:Float, ?ease:
 	}
 
 	for (strum in getStrumline(strumLine)) {
-		var xPoint:Float = (X != null && Math.isNaN(X)) ? strum.x : positionStrumNote(strum, X);
-		var yPoint:Float = (Y != null && Math.isNaN(Y)) ? strum.y : Y;
+		var xPoint:Float = (X == null || Math.isNaN(X)) ? strum.x : positionStrumNote(strum, X);
+		var yPoint:Float = (Y == null || Math.isNaN(Y)) ? strum.y : Y;
+
 		FlxTween.cancelTweensOf(strum);
-		FlxTween.tween(strum, {x: xPoint, y: yPoint}, time, {ease: ease});
+		FlxTween.tween(strum, {x: xPoint, y: yPoint}, time, {ease: ease, onComplete: (_) ->
+			{
+				if (!cum && onComplete != null)
+				{
+					onComplete();
+					cum = true;
+				}
+			}
+		});
 	}
 }
 
@@ -139,14 +150,14 @@ function validateAnimScript(script:HScript):Bool {
 }
 
 function onEventPushed(n:String) {
-	if (StringTools.startsWith(n, eventPrefix))
+	if (!animationMap.exists(n) && StringTools.startsWith(n, eventPrefix))
 	{
 		// Initializing a new Animation Script
 
 		var animation:String = StringTools.trim(n.substr(eventPrefix.length));
 		var scriptPath:String = Paths.mods(Mods.currentModDirectory + "/scripts/animation/" + animation + ".hx");
 
-		if (FileSystem.exists(scriptPath) && !animationMap.exists(n))
+		if (FileSystem.exists(scriptPath))
 		{
 			var daScript = new HScript(null, scriptPath);
 
@@ -158,16 +169,51 @@ function onEventPushed(n:String) {
 	}
 }
 
+function getEventAnimData(value:String):Array<String>
+{
+	// the full prompt of value1 should be "add strumline" or "remove strumline". this splits it into "add/remove" and "strumline"
+	var cmd = StringTools.trim(value).split(" ");
+	return [StringTools.trim(cmd.shift()), StringTools.trim(cmd.join(" "))];
+}
+
+
 function onEvent(n:String, v1:String, v2:String) {
 	if (animationMap.exists(n)) {
 		var script = animationMap.get(n);
 
+		var v1Data = getEventAnimData(v1);
 		var properties = v2.split(";");
+
+		// If getEventAnimData fails to extract anything it activates this safeguard.
+		// Also works as a default
+		var animState:String = "onAnim_Start";
+		var strumlineName:String = v1;
+
+		if (v1Data.length > 1 && v1Data[0] != "" && v1Data[1] != "")
+		{
+			animState = switch(v1Data[0]) {
+				case "add": "onAnim_Start";
+				case "remove": "onAnim_End";
+				default: animState;
+			};
+
+			strumlineName = v1Data[1];
+		}
+
 		for (i in 0...properties.length)
 			properties[i] = StringTools.trim(properties[i]);
 
-		script.call("onAnim_Start", [v1].concat(properties));
+		var timeData:String = properties.shift() ?? "2";
+		var tween:FlxEase = LuaUtils.getTweenEaseByString(properties.shift());
+		var parseTime:Float = Std.parseFloat(timeData);
+
+		if (Math.isNaN(parseTime))
+			parseTime = 2;
+
+		script.call(animState, [strumlineName, parseTime, tween].concat(properties));
 	}
+	// else
+	// 	debugPrint("Unable to find the matching animation script for " + n);
 }
 
 // SCRIPT HANDLING -------------------------------------------------------------------------
@@ -253,6 +299,10 @@ function applyDefaultScript(script:HScript):HScript
 
 	script.set("positionStrumline", positionStrumline);
 	script.set("moveStrumline", moveStrumline);
+
+	script.set("hideStrumline", function(name:String) {
+		positionStrumline(name, -1000);
+	});
 
 	return script;
 }

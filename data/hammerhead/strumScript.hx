@@ -23,7 +23,7 @@ function onInit()
 
 	// addStrumline("Third Player Note"); // Adds it to the game!
 
-	// createStrumline("Fourth Player Note"); // NOWAY....
+	createStrumline("Fourth Player Note"); // NOWAY....
 	// addStrumline("Fourth Player Note"); // 😱
 
 	scaleNotes(0.9); // Scales all the notes down (so they can all be visible and not go off-screen)
@@ -55,13 +55,6 @@ function tween_getRemoveData(strum:StrumNote)
 	};
 }
 
-function onSongStart()
-{
-	// setStrumLineOrder(["dad", "bf"]);
-	// flyStrumlineUp("Third Player Note", 3, 5, FlxEase.sineInOut);
-	// removeStrumline("Third Player Note");
-}
-
 // More character code
 
 function characterBopper(char:Character, beat:Int):Void
@@ -75,64 +68,3 @@ function onCountdownTick(tick:Countdown, count:Int)
 
 function onBeatHit()
 	characterBopper(luigi, curBeat);
-
-function flyStrumlineUp(name:String, id:Int, ?time:Float, ?tween:FlxEase)
-{
-	if (Math.isNaN(time))
-		time = 2;
-
-	tween = tween ?? FlxEase.linear;
-
-	var strumlineOrder = getStrumlineOrder();
-	id = Math.max(Math.min(id, strumlineOrder.length + 1), 1) - 1;
-
-	strumlineOrder.insert(id, name);
-	var len:Int = strumlineOrder.length;
-	
-	var i:Int = 0;
-
-	for (strumline in strumlineOrder)
-	{
-		var X:Float = FlxG.width * ((i + .5) / len);
-		var Y:Float = ClientPrefs.data.downScroll ? (FlxG.height) : -200;
-
-		if (i == id)
-			positionStrumline(strumline, X, Y);
-
-		moveStrumline(strumline, X, DEFAULT_STRUM_Y, time, tween);
-
-		i += 1;
-	}
-}
-
-function oldFormula()
-{
-	setStrumlineOrder(["dad", "bf", "Third Player Note"]);
-
-	var i:Int = 0;
-	var len:Int = strumAPI.get("strumlineOrder").length;
-
-	for (strumline in strumAPI.get("strumlineOrder"))
-	{
-		moveStrumline(strumline, FlxG.width * ((i + .5) / len), null, 2, FlxEase.bounceInOut);
-		i += 1;
-	}
-}
-
-function oldFormula2()
-{
-	setStrumlineOrder(["dad", "bf"]);
-	var whatIwanttoappear:String = "Third Player Note";
-
-	strumAPI.get("strumlineOrder").insert(1, whatIwanttoappear);
-	positionStrumline(whatIwanttoappear, FlxG.width * .5, FlxG.height + 100);
-
-	var i:Int = 0;
-	var len:Int = strumAPI.get("strumlineOrder").length;
-
-	for (strumline in strumAPI.get("strumlineOrder"))
-	{
-		moveStrumline(strumline, FlxG.width * ((i + .5) / len), ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50, 2, FlxEase.bounceInOut);
-		i += 1;
-	}
-}
