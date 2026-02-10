@@ -9,20 +9,21 @@ import backend.NoteTypesConfig;
 import backend.Mods;
 import psychlua.LuaUtils;
 
+// Important data structs / constants.
+
 typedef StrumData = {
 	var strumline:Array<StrumNote>;
 	@:optional var char:Character;
 }
 
 final defaultScale:Float = 0.7;
+final swagWidth:Float = 160;
 var curScale:Float =  defaultScale;
-
-var swagWidth:Float = 160;
-
-var scripts:Array<HScript> = [];
 
 var strumlineOrder:Array<String> = [];
 var strumlineData:StringMap<StrumData> = new StringMap();
+
+var gameScripts:Array<HScript> = [];
 
 function getScriptName(name:String):String
 {
@@ -32,21 +33,55 @@ function getScriptName(name:String):String
 	return path.toString();
 }
 
+// STRUMLINE FUNCTIONS ----------------------------------------------------------------------------------
+
+// Callback functions
+
+// Called whenever a strum note is added.
+// Can be used for cool intro effects, when possible.
+function onStrumAdded(strum:StrumNote)
+{
+	strum.scale.set(curScale, curScale);
+	strum.updateHitbox();
+
+	var returnValue = callEvent("onStrumAdded", [strum]);
+
+	if (returnValue != Function_Stop && !PlayState.isStoryMode && !game.skipArrowStartTween)
+	{
+		strum.alpha = 0;
+		FlxTween.tween(strum, {alpha: 1}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * strum.ID)});
+	}
+}
+
+// Called whenever a strum note is removed.
+// Can be used for cool outro effects, when possible.
+function onStrumRemoved(strum:StrumNote)
+{
+	game.strumLineNotes.remove(strum, true);
+	callEvent("onStrumRemoved", [strum]);
+}
+
+// Data functions (pretty self-explanatory I think)
+
 function createStrumData(name:String, strumline:Array<StrumNote>, ?char:Character):Void
 	strumlineData.set(name, {strumline: strumline, char: char});
 
-function strumExists(name:String):Bool
+function strumlineExists(name:String):Bool
 	return strumlineData.exists(name);
 
 function getStrumline(name:String):Null<Array<StrumNote>>
-	return strumlineData.get(name)?.strumline;
+	return strumlineData.get(name)?.strumline ?? [];
 
 function getCharacter(name:String):Null<Character>
 	return strumlineData.get(name)?.char;
 
+// Strum Manipulation functions (functions that control the strumline)
+
+// Positions a note lane and gives it an offset based on it's position in a strumline.
 function positionStrumNote(spr:StrumNote, pos:Float):Float
 	return pos - spr.width / 2 + (swagWidth * spr.scale.x * (spr.noteData - 1.5));
 
+// Positions the entire strumline based on X and Y coordinates.
 function positionStrumline(name:String, ?X:Float, ?Y:Float):Void {
 	for (strum in getStrumline(name)) {
 		strum.x = (X == null || Math.isNaN(X)) ? strum.x : positionStrumNote(strum, X);
@@ -54,6 +89,7 @@ function positionStrumline(name:String, ?X:Float, ?Y:Float):Void {
 	}
 }
 
+// Moves the strumline under the influence of a tween.
 function moveStrumline(strumLine:String, ?X:Float, ?Y:Float, ?time:Float, ?ease:FlxEase, ?onComplete:Void->Void):Void {
 	time = time ?? 0;
 	ease = ease ?? FlxEase.linear;
@@ -81,28 +117,9 @@ function moveStrumline(strumLine:String, ?X:Float, ?Y:Float, ?time:Float, ?ease:
 	}
 }
 
-function onStrumAdded(strum:StrumNote)
-{
-	strum.scale.set(curScale, curScale);
-	strum.updateHitbox();
-
-	var returnValue = callEvent("onStrumAdded", [strum]);
-
-	if (returnValue != Function_Stop && !PlayState.isStoryMode && !game.skipArrowStartTween)
-	{
-		strum.alpha = 0;
-		FlxTween.tween(strum, {alpha: 1}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * strum.ID)});
-	}
-}
-
-function onStrumRemoved(strum:StrumNote)
-{
-	game.strumLineNotes.remove(strum, true);
-	callEvent("onStrumRemoved", [strum]);
-}
-
+// Makes the strumline visible on a screen.
 function addStrumline(name:String, ?isPlayer:Bool):Void {
-	if (strumlineOrder.contains(name))
+	if (!strumlineExists(name) || strumlineOrder.contains(name))
 		return;
 
 	for (strum in getStrumline(name))
@@ -114,8 +131,9 @@ function addStrumline(name:String, ?isPlayer:Bool):Void {
 	strumlineOrder.push(name);
 };
 
+// Works like inserting an FlxBasic in an FlxState.
 function insertStrumline(idx:Int, name:String, ?isPlayer:Bool):Void {
-	if (strumlineOrder.contains(name))
+	if (!strumlineExists(name) || strumlineOrder.contains(name))
 		return;
 
 	var strumIDX:Int = game.strumLineNotes.length;
@@ -132,16 +150,42 @@ function insertStrumline(idx:Int, name:String, ?isPlayer:Bool):Void {
 	strumlineOrder.insert(idx, name);
 };
 
+// Add the strumline behind another one.
 function addStrumlineBehind(strumline:String, name:String, ?isPlayer:Bool):Void {
 	insertStrumline(strumlineOrder.indexOf(strumline), name, isPlayer);
 };
 
 // EVENT HANDLING --------------------------------------------------------------------------
 
-// Way to identify animation events
-var eventPrefix:String = "STRUMLINE-";
+final DEFAULT_RETURN = Function_Continue;
+
+// Functions that manages firing events, and receiving callbacks.
+// Works similarly to Psych Engine.
+function callEvent(eventName:String, ?args:Array<Dynamic>)
+{
+	var returnValue = DEFAULT_RETURN;
+
+	for (script in gameScripts)
+	{
+		if (script == null || !script.exists(eventName))
+			continue;
+
+		var scriptReturn = script.call(eventName, args).returnValue ?? DEFAULT_RETURN;
+
+		if (scriptReturn == Function_Stop || scriptReturn == Function_StopHScript || script == Function_StopAll)
+		{
+			returnValue = Function_Stop;
+			break;
+		}
+	}
+
+	return returnValue;
+}
+
+final ANIMATION_EVENT_PREFIX:String = "strumline.";
 var animationMap:StringMap<HScript> = new StringMap();
 
+// Checks whether the animation script is eligible for use.
 function validateAnimScript(script:HScript):Bool {
 	if (script.exists("onAnim_Start"))
 		return true;
@@ -149,12 +193,20 @@ function validateAnimScript(script:HScript):Bool {
 	return false;
 }
 
+// Helper function to extract data from animation event values.
+function getEventAnimData(value:String):Array<String>
+{
+	// the full prompt of value1 should be "add strumline" or "remove strumline". this splits it into "add/remove" and "strumline"
+	var cmd = StringTools.trim(value).split(" ");
+	return [StringTools.trim(cmd.shift()), StringTools.trim(cmd.join(" "))];
+}
+
 function onEventPushed(n:String) {
-	if (!animationMap.exists(n) && StringTools.startsWith(n, eventPrefix))
+	if (!animationMap.exists(n) && StringTools.startsWith(n, ANIMATION_EVENT_PREFIX))
 	{
 		// Initializing a new Animation Script
 
-		var animation:String = StringTools.trim(n.substr(eventPrefix.length));
+		var animation:String = StringTools.trim(n.substr(ANIMATION_EVENT_PREFIX.length));
 		var scriptPath:String = Paths.mods(Mods.currentModDirectory + "/scripts/animation/" + animation + ".hx");
 
 		if (FileSystem.exists(scriptPath))
@@ -169,16 +221,10 @@ function onEventPushed(n:String) {
 	}
 }
 
-function getEventAnimData(value:String):Array<String>
-{
-	// the full prompt of value1 should be "add strumline" or "remove strumline". this splits it into "add/remove" and "strumline"
-	var cmd = StringTools.trim(value).split(" ");
-	return [StringTools.trim(cmd.shift()), StringTools.trim(cmd.join(" "))];
-}
-
-
 function onEvent(n:String, v1:String, v2:String) {
 	if (animationMap.exists(n)) {
+		// Parsing event data and passing it onto the found animation script.
+
 		var script = animationMap.get(n);
 
 		var v1Data = getEventAnimData(v1);
@@ -220,18 +266,27 @@ function onEvent(n:String, v1:String, v2:String) {
 
 function applyDefaultScript(script:HScript):HScript
 {
-	script.set("DEFAULT_STRUM_Y", ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50);
-	
+	// Importing functions from the API script.
 	script.set("getCharacter", getCharacter);
+	script.set("addStrumline", addStrumline);
+	script.set("insertStrumline", insertStrumline);
+	script.set("addStrumlineBehind", addStrumlineBehind);
+	script.set("positionStrumline", positionStrumline);
+	script.set("moveStrumline", moveStrumline);
+
+	// The default Y position the strumline spawns at.
+	script.set("DEFAULT_STRUM_Y", ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50);
+
+	// Updates the order of strumlines. Usually used for animation.
+	script.set("getStrumlineOrder", () -> return strumlineOrder);
+	script.set("setStrumlineOrder", (order:Array<String>) -> strumlineOrder = order);
 
 	script.set("setStrumlineVisible", (name:String, value:Bool) -> {
 		for (strum in getStrumline(name))
 			strum.visible = value;
 	});
 
-	script.set("getStrumlineOrder", () -> return strumlineOrder);
-	script.set("setStrumlineOrder", (order:Array<String>) -> strumlineOrder = order);
-
+	// Finds the middle between the first and the last note on the X coordinates.
 	script.set("getStrumlineMidpoint", function (name:String):Float {
 		var strumline:Array<StrumNote> = getStrumline(name);
 
@@ -241,6 +296,7 @@ function applyDefaultScript(script:HScript):HScript
 		return (first.x + (last.x + last.width)) * 0.5;
 	});
 
+	// Update note scale on all strumlines.
 	script.set("scaleNotes", function(size:Float):Void {
 		var convScale = defaultScale * size;
 		curScale = convScale;
@@ -263,14 +319,12 @@ function applyDefaultScript(script:HScript):HScript
 		}
 	});
 
+	// Has the strumline been added yet?
 	script.set("isStrumlineAlive", function(name:String):Void {
 		return strumlineOrder.contains(name);
 	});
 
-	script.set("addStrumline", addStrumline);
-	script.set("insertStrumline", insertStrumline);
-	script.set("addStrumlineBehind", addStrumlineBehind);
-
+	// Removes strumline from the world.
 	script.set("removeStrumline", function(name:String):Void {
 		for (strum in getStrumline(name))
 		{
@@ -297,9 +351,7 @@ function applyDefaultScript(script:HScript):HScript
 		strumlineOrder.remove(name);
 	});
 
-	script.set("positionStrumline", positionStrumline);
-	script.set("moveStrumline", moveStrumline);
-
+	// lol
 	script.set("hideStrumline", function(name:String) {
 		positionStrumline(name, -1000);
 	});
@@ -317,12 +369,14 @@ function initAnimScript(script:HScript):HScript
 
 function initGameScript(script:HScript):HScript
 {
+	// Game script has a lot more low-level access than a default script.
+
 	applyDefaultScript(script);
 
 	script.set("strumAPI", this);
 	script.set("strumlineData", strumlineData);
 
-	script.set("strumExists", strumExists);
+	script.set("strumlineExists", strumlineExists);
 	script.set("getStrumline", getStrumline);
 
 	script.set("setCharacter", (name:String, char:Character) -> strumlineData.get(name).char = char);
@@ -352,32 +406,9 @@ function initGameScript(script:HScript):HScript
 		return strumNotes;
 	});
 
-	scripts.push(script);
+	gameScripts.push(script);
 
 	return script; // The most USELESS line of code ever but anyways :P
-}
-
-var defaultReturn = Function_Continue;
-
-function callEvent(eventName:String, ?args:Array<Dynamic>)
-{
-	var returnValue = defaultReturn;
-
-	for (script in scripts)
-	{
-		if (script == null || !script.exists(eventName))
-			continue;
-
-		var scriptReturn = script.call(eventName, args).returnValue ?? defaultReturn;
-
-		if (scriptReturn == Function_Stop || scriptReturn == Function_StopHScript || script == Function_StopAll)
-		{
-			returnValue = Function_Stop;
-			break;
-		}
-	}
-
-	return returnValue;
 }
 
 function onCreatePost()
@@ -398,7 +429,7 @@ function onCreatePost()
 			initGameScript(script);
 	}
 
-	if (scripts.length < 1) // Destroy the script if there's no strumline scripts available (performance reasons)
+	if (gameScripts.length < 1) // Destroy the script if there's no strumline gameScripts available (performance reasons)
 	{
 		game.hscriptArray.remove(this);
 		this.destroy();
@@ -409,7 +440,7 @@ function onCreatePost()
 
 	for (note in game.unspawnNotes)
 	{
-		if (!strumExists(note.noteType))
+		if (!strumlineExists(note.noteType))
 			continue;
 
 		var myStrum:StrumNote = getStrumline(note.noteType)[note.noteData];
