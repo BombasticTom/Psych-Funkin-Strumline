@@ -392,10 +392,7 @@ function initGameScript(script:HScript):HScript
 			strum.playAnim("static");
 			strumNotes.push(strum);
 
-			if (isPlayer ?? false)
-				game.playerStrums.add(strum);
-			else
-				game.opponentStrums.add(strum);
+			((isPlayer ?? false) ? game.playerStrums : game.opponentStrums).add(strum);
 		}
 
 		createStrumData(name, strumNotes, char);
@@ -451,4 +448,25 @@ function onCreatePost()
 		note.noteData = strumLine.members.indexOf(myStrum);
 		note.noAnimation = true;
 	}
+}
+
+function onDestroy()
+{
+	trace("DESTROYING ANIMATION SCRIPTS");
+
+	for (animScript in animationMap)
+	{
+		if (animScript == null)
+			continue;
+
+		// Causes the game to pause for longer
+		// We won't need a destroy onDestroy callback for animation scripts anyways :P
+		// if (animScript.exists("onDestroy"))
+			// animScript.call("onDestroy");
+
+		trace("DESTROYED [" + getScriptName(animScript.origin) + ".hx]");
+		animScript.destroy();
+	}
+
+	animationMap.clear();
 }
