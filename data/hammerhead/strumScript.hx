@@ -26,7 +26,7 @@ function onInit()
 	createStrumline("Fourth Player Note"); // NOWAY....
 	// addStrumline("Fourth Player Note"); // 😱
 
-	scaleNotes(0.9); // Scales all the notes down (so they can all be visible and not go off-screen)
+	scaleNotesGlobal(0.9); // Scales all the notes down (so they can all be visible and not go off-screen)
 
 	// Basic position for your strumline
 
@@ -46,7 +46,7 @@ function onStrumAdded(strum:StrumNote)
 	return Function_Stop;
 }
 
-function tween_getRemoveData(strum:StrumNote)
+function removeStrum_getTweenData(strum:StrumNote)
 {
 	return {
 		properties: {y: strum.y + 720},
