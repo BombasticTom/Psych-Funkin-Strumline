@@ -77,6 +77,39 @@ function getCharacter(name:String):Null<Character>
 
 // Strum Manipulation functions (functions that control the strumline)
 
+// Local (updated only for one strumline) &
+// Global (updated for all current and future strumlines)
+function updateNoteScale(size:Float, ?strumline:String)
+{
+	var isGlobal:Bool = (strumline != null && !strumlineExists(strumline));
+	var updatedStrums:Array<StrumNote> = (isGlobal) ? getStrumline(strumline) : game.strumLineNotes.members;
+	var newScale:Float = defaultScale * size;
+
+	if (isGlobal) curScale = newScale;
+	
+	for (strum in updatedStrums)
+	{
+		strum.scale.set(newScale, newScale);
+		strum.updateHitbox();
+	}
+
+	for (note in game.unspawnNotes.concat(game.notes.members))
+	{
+		// Ignore notes which aren't in the global or strumline scope.
+		if (!isGlobal && !note.noteType == strumline)
+			continue;
+
+		if (note.isSustainNote)
+			// Adjust the X offset of sustain notes.
+			note.offsetX *= (newScale / note.scale.x);
+		else
+			note.scale.y = newScale;
+
+		note.scale.x = newScale;
+		note.updateHitbox();
+	}
+}
+
 // Positions a note lane and gives it an offset based on it's position in a strumline.
 function positionStrumNote(spr:StrumNote, pos:Float):Float
 	return pos - spr.width / 2 + (swagWidth * spr.scale.x * (spr.noteData - 1.5));
@@ -296,27 +329,15 @@ function applyDefaultScript(script:HScript):HScript
 		return (first.x + (last.x + last.width)) * 0.5;
 	});
 
+	// Update note scale on a specific strumline.
+	script.set("scaleStrumlineNotes", function (name:String, size:Float):Void {
+		updateNoteScale(size, name);
+	});
+	
 	// Update note scale on all strumlines.
-	script.set("scaleNotes", function(size:Float):Void {
-		var convScale = defaultScale * size;
-		curScale = convScale;
-
-		for (strum in game.strumLineNotes)
-		{
-			strum.scale.set(convScale, convScale);
-			strum.updateHitbox();
-		}
-
-		for (note in game.unspawnNotes)
-		{
-			if (note.isSustainNote)
-				note.offsetX *= (convScale / note.scale.x);
-			else
-				note.scale.y = convScale;
-
-			note.scale.x = convScale;
-			note.updateHitbox();
-		}
+	// This also updates the default scale of all future strum notes.
+	script.set("scaleNotesGlobal", function(size:Float):Void {
+		updateNoteScale(size);
 	});
 
 	// Has the strumline been added yet?
@@ -328,7 +349,7 @@ function applyDefaultScript(script:HScript):HScript
 	script.set("removeStrumline", function(name:String):Void {
 		for (strum in getStrumline(name))
 		{
-			var tweenData = script.call("tween_getRemoveData", [strum]).returnValue;
+			var tweenData = script.call("removeStrum_getTweenData", [strum]).returnValue;
 			
 			if (tweenData != null)
 			{
