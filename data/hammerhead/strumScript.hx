@@ -17,16 +17,16 @@ function onInit()
 
 	// Functions for creating the strumline!
 
+	// scaleNotesGlobal(0.9); // Scales all the notes down (so they can all be visible and not go off-screen)
+
 	// Creates a new strumline, and you can assign a character to it
 	// You can also use assignCharacter("Third Player Note", game.gf) to do the same thing!
 	createStrumline("Third Player Note", luigi);
 
-	// addStrumline("Third Player Note"); // Adds it to the game!
+	addStrumline("Third Player Note"); // Adds it to the game!
 
 	createStrumline("Fourth Player Note"); // NOWAY....
 	// addStrumline("Fourth Player Note"); // 😱
-
-	scaleNotes(0.9); // Scales all the notes down (so they can all be visible and not go off-screen)
 
 	// Basic position for your strumline
 
@@ -39,6 +39,14 @@ function onInit()
 	// triggerAnimation("left", "prepare");
 }
 
+function onInitPost()
+{
+	scaleStrumlineNotes("bf", 1.2);
+	positionStrumline("dad", FlxG.width*0.25);
+	positionStrumline("bf", FlxG.width*0.75);
+	positionStrumline("Third Player Note", -6767);
+}
+
 function onStrumAdded(strum:StrumNote)
 {
 	strum.y += 720;
@@ -46,7 +54,7 @@ function onStrumAdded(strum:StrumNote)
 	return Function_Stop;
 }
 
-function tween_getRemoveData(strum:StrumNote)
+function removeStrum_getTweenData(strum:StrumNote)
 {
 	return {
 		properties: {y: strum.y + 720},

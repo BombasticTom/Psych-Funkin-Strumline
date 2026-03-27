@@ -75,7 +75,67 @@ function getStrumline(name:String):Null<Array<StrumNote>>
 function getCharacter(name:String):Null<Character>
 	return strumlineData.get(name)?.char;
 
+// Finds the middle between the first and the last note on the X coordinates.
+function getStrumlineMidpoint(name:String):Float {
+	var strumline:Array<StrumNote> = getStrumline(name);
+
+	var first:StrumNote = strumline[0];
+	var last:StrumNote = strumline[strumline.length - 1];
+
+	return (first.x + (last.x + last.width)) * 0.5;
+}
+
 // Strum Manipulation functions (functions that control the strumline)
+
+function setNoteScale(note:Note, size:Float)
+{
+	if (note.isSustainNote)
+		// Adjust the X offset of sustain notes.
+		note.offsetX *= (size / note.scale.x);
+	else
+		note.scale.y = size;
+
+	note.scale.x = size;
+	note.updateHitbox();
+}
+
+function updateNoteGroupScale(noteGroup:Array<Note>, targetStrums:Array<StrumNote>, scale:Float, ?forceScale:Bool)
+{
+	for (note in noteGroup)
+	{
+		if (forceScale)
+		{
+			setNoteScale(note, scale);
+			continue;
+		}
+
+		var strumGroup:Array<StrumNote> = note.mustPress ? game.playerStrums : game.opponentStrums;
+		var myStrumNote:StrumNote = strumGroup.members[note.noteData];
+
+		if (myStrumNote != null && targetStrums.indexOf(myStrumNote) != -1)
+			setNoteScale(note, myStrumNote.scale.x);
+	}
+}
+
+// Local (updated only for one strumline) &
+// Global (updated for all current and future strumlines)
+function updateNoteScale(size:Float, ?strumline:String)
+{
+	var isGlobal:Bool = (strumline == null || StringTools.trim(strumline).length == 0);
+	var targetStrums:Array<StrumNote> = (isGlobal) ? game.strumLineNotes.members : getStrumline(strumline);
+	var newScale:Float = defaultScale * size;
+
+	if (isGlobal) curScale = newScale;
+	
+	for (strum in targetStrums)
+	{
+		strum.scale.set(newScale, newScale);
+		strum.updateHitbox();
+	}
+
+	updateNoteGroupScale(game.unspawnNotes, targetStrums, newScale, isGlobal);
+	updateNoteGroupScale(game.notes.members, targetStrums, newScale, isGlobal);
+}
 
 // Positions a note lane and gives it an offset based on it's position in a strumline.
 function positionStrumNote(spr:StrumNote, pos:Float):Float
@@ -269,6 +329,7 @@ function applyDefaultScript(script:HScript):HScript
 	// Importing functions from the API script.
 	script.set("getCharacter", getCharacter);
 	script.set("addStrumline", addStrumline);
+	script.set("getStrumlineMidpoint", getStrumlineMidpoint);
 	script.set("insertStrumline", insertStrumline);
 	script.set("addStrumlineBehind", addStrumlineBehind);
 	script.set("positionStrumline", positionStrumline);
@@ -286,37 +347,15 @@ function applyDefaultScript(script:HScript):HScript
 			strum.visible = value;
 	});
 
-	// Finds the middle between the first and the last note on the X coordinates.
-	script.set("getStrumlineMidpoint", function (name:String):Float {
-		var strumline:Array<StrumNote> = getStrumline(name);
-
-		var first:StrumNote = strumline[0];
-		var last:StrumNote = strumline[strumline.length - 1];
-
-		return (first.x + (last.x + last.width)) * 0.5;
+	// Update note scale on a specific strumline.
+	script.set("scaleStrumlineNotes", function (name:String, size:Float):Void {
+		updateNoteScale(size, name);
 	});
-
+	
 	// Update note scale on all strumlines.
-	script.set("scaleNotes", function(size:Float):Void {
-		var convScale = defaultScale * size;
-		curScale = convScale;
-
-		for (strum in game.strumLineNotes)
-		{
-			strum.scale.set(convScale, convScale);
-			strum.updateHitbox();
-		}
-
-		for (note in game.unspawnNotes)
-		{
-			if (note.isSustainNote)
-				note.offsetX *= (convScale / note.scale.x);
-			else
-				note.scale.y = convScale;
-
-			note.scale.x = convScale;
-			note.updateHitbox();
-		}
+	// This also updates the default scale of all future strum notes.
+	script.set("scaleNotesGlobal", function(size:Float):Void {
+		updateNoteScale(size);
 	});
 
 	// Has the strumline been added yet?
@@ -328,7 +367,7 @@ function applyDefaultScript(script:HScript):HScript
 	script.set("removeStrumline", function(name:String):Void {
 		for (strum in getStrumline(name))
 		{
-			var tweenData = script.call("tween_getRemoveData", [strum]).returnValue;
+			var tweenData = script.call("removeStrum_getTweenData", [strum]).returnValue;
 			
 			if (tweenData != null)
 			{
@@ -448,6 +487,8 @@ function onCreatePost()
 		note.noteData = strumLine.members.indexOf(myStrum);
 		note.noAnimation = true;
 	}
+
+	callEvent("onInitPost");
 }
 
 function onDestroy()
